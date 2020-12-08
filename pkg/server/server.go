@@ -73,11 +73,7 @@ func New(cfg Config) (*Server, error) {
 		version:     cfg.Version,
 		commit:      cfg.Commit,
 		buildBranch: cfg.BuildBranch,
-	}
-	if cfg.Listener != nil {
-		if err := s.init(&cfg); err != nil {
-			return nil, err
-		}
+		listener:    cfg.Listener,
 	}
 
 	return s, nil
@@ -94,6 +90,7 @@ type Server struct {
 	shutdownInProgress bool
 	isInitialized      bool
 	mtx                sync.Mutex
+	listener           net.Listener
 
 	configFile  string
 	homePath    string
@@ -106,11 +103,12 @@ type Server struct {
 }
 
 // init initializes the server and its services.
-func (s *Server) init(cfg *Config) error {
+func (s *Server) init() error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	if s.isInitialized {
+		fmt.Printf("Server already initialized\n")
 		return nil
 	}
 	s.isInitialized = true
@@ -129,15 +127,13 @@ func (s *Server) init(cfg *Config) error {
 		return err
 	}
 
-	if cfg != nil {
+	if s.listener != nil {
 		for _, service := range services {
 			if httpS, ok := service.Instance.(*api.HTTPServer); ok {
 				// Configure the api.HTTPServer if necessary
 				// Hopefully we can find a better solution, maybe with a more advanced DI framework, f.ex. Dig?
-				if cfg.Listener != nil {
-					s.log.Debug("Using provided listener for HTTP server")
-					httpS.Listener = cfg.Listener
-				}
+				s.log.Debug("Using provided listener for HTTP server")
+				httpS.Listener = s.listener
 			}
 		}
 	}
@@ -148,9 +144,16 @@ func (s *Server) init(cfg *Config) error {
 // Run initializes and starts services. This will block until all services have
 // exited. To initiate shutdown, call the Shutdown method in another goroutine.
 func (s *Server) Run() (err error) {
-	if err = s.init(nil); err != nil {
+	fmt.Printf("Grafana server running\n")
+	if err = s.init(); err != nil {
 		return
 	}
+
+	org, err := s.HTTPServer.SQLStore.GetOrgByName("Main Org.")
+	if err != nil {
+		panic(fmt.Sprintf("Couldn't get main org from %p", s.HTTPServer.SQLStore))
+	}
+	fmt.Printf("Got main org before starting services %q\n", org.Name)
 
 	services := registry.GetServices()
 
@@ -164,6 +167,13 @@ func (s *Server) Run() (err error) {
 		if registry.IsDisabled(svc.Instance) {
 			continue
 		}
+		if hs, ok := service.(*api.HTTPServer); ok {
+			org, err := hs.SQLStore.GetOrgByName("Main Org.")
+			if err != nil {
+				panic(fmt.Sprintf("Couldn't get main org from %p", hs.SQLStore))
+			}
+			fmt.Printf("Got main org %q\n", org.Name)
+		}
 
 		// Variable is needed for accessing loop variable in callback
 		descriptor := svc
@@ -171,6 +181,14 @@ func (s *Server) Run() (err error) {
 			// Don't start new services when server is shutting down.
 			if s.shutdownInProgress {
 				return nil
+			}
+
+			if hs, ok := service.(*api.HTTPServer); ok {
+				org, err := hs.SQLStore.GetOrgByName("Main Org.")
+				if err != nil {
+					panic(fmt.Sprintf("Couldn't get main org from %p", hs.SQLStore))
+				}
+				fmt.Printf("Got main org in goroutine: %q\n", org.Name)
 			}
 
 			err := service.Run(s.context)

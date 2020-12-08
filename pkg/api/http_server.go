@@ -48,7 +48,7 @@ func init() {
 	registry.Register(&registry.Descriptor{
 		Name:         "HTTPServer",
 		Instance:     &HTTPServer{},
-		InitPriority: registry.High,
+		InitPriority: registry.MediumHigh,
 	})
 }
 
@@ -96,6 +96,13 @@ func (hs *HTTPServer) AddMiddleware(middleware macaron.Handler) {
 }
 
 func (hs *HTTPServer) Run(ctx context.Context) error {
+	fmt.Printf("\nHTTP server running\n\n")
+	org, err := hs.SQLStore.GetOrgByName("Main Org.")
+	if err != nil {
+		panic(fmt.Sprintf("Couldn't get main org in Run from %p", hs.SQLStore))
+	}
+	fmt.Printf("Got main org in Run: %q\n", org.Name)
+
 	hs.context = ctx
 
 	hs.applyRoutes()
@@ -139,6 +146,12 @@ func (hs *HTTPServer) Run(ctx context.Context) error {
 
 	switch hs.Cfg.Protocol {
 	case setting.HTTPScheme, setting.SocketScheme:
+		fmt.Printf("\nListening for HTTP, SQLStore: %p\n\n", hs.SQLStore)
+		org, err := hs.SQLStore.GetOrgByName("Main Org.")
+		if err != nil {
+			panic(fmt.Sprintf("Couldn't get main org from %p", hs.SQLStore))
+		}
+		fmt.Printf("Got main org %q\n", org.Name)
 		if err := hs.httpSrv.Serve(listener); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				hs.log.Debug("server was shutdown gracefully")

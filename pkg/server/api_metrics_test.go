@@ -104,6 +104,12 @@ func TestQueryCloudWatchMetrics(t *testing.T) {
 			},
 		}, tr)
 	})
+
+	/*
+		fmt.Printf("Test sleeping\n")
+		time.Sleep(5 * time.Second)
+		fmt.Printf("Finished test sleep\n")
+	*/
 }
 
 func TestQueryCloudWatchLogs(t *testing.T) {
@@ -280,8 +286,18 @@ func startGrafana(t *testing.T, grafDir, cfgPath string, sqlStore *sqlstore.SQLS
 
 	t.Logf("Registered SQL store %p", sqlStore)
 
+	/*
+		time.Sleep(10 * time.Second)
+		org, err = server.HTTPServer.SQLStore.GetOrgByName("Main Org.")
+		if err != nil {
+			panic(fmt.Sprintf("Couldn't get main org from %p", server.HTTPServer.SQLStore))
+		}
+		fmt.Printf("Could get the org after sleeping\n")
+	*/
+	fmt.Printf("\nCreating Grafana server\n\n")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+
 	server, err := New(Config{
 		ConfigFile: cfgPath,
 		HomePath:   grafDir,
@@ -291,6 +307,7 @@ func startGrafana(t *testing.T, grafDir, cfgPath string, sqlStore *sqlstore.SQLS
 
 	go func() {
 		// When the server runs, it will also build and initialize the service graph
+		fmt.Printf("\nStarting Grafana\n\n")
 		if err := server.Run(); err != nil {
 			t.Log("Server exited uncleanly", "error", err)
 		}
@@ -300,6 +317,7 @@ func startGrafana(t *testing.T, grafDir, cfgPath string, sqlStore *sqlstore.SQLS
 	})
 
 	// Wait for Grafana to be ready
+	fmt.Printf("Waiting for G\n")
 	addr := listener.Addr().String()
 	resp, err := http.Get(fmt.Sprintf("http://%s/api/health", addr))
 	require.NoError(t, err)
@@ -307,6 +325,7 @@ func startGrafana(t *testing.T, grafDir, cfgPath string, sqlStore *sqlstore.SQLS
 	resp.Body.Close()
 	require.Equal(t, 200, resp.StatusCode)
 
+	fmt.Printf("G is ready\n")
 	t.Logf("Grafana is listening on %s", addr)
 
 	return addr
@@ -317,11 +336,8 @@ func setUpDatabase(t *testing.T, grafDir string) *sqlstore.SQLStore {
 
 	sqlStore := sqlstore.InitTestDB(t)
 	t.Logf("Created SQLStore: %+v", sqlStore)
-	org, err := sqlStore.GetOrgByName("Main Org.")
-	require.NoError(t, err)
-	require.NotNil(t, org)
 
-	err = sqlStore.WithDbSession(context.Background(), func(sess *sqlstore.DBSession) error {
+	err := sqlStore.WithDbSession(context.Background(), func(sess *sqlstore.DBSession) error {
 		_, err := sess.Insert(&models.DataSource{
 			Id:      1,
 			OrgId:   1,

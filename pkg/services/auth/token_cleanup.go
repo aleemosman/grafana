@@ -8,12 +8,12 @@ import (
 )
 
 func (s *UserAuthTokenService) Run(ctx context.Context) error {
-	var err error
 	ticker := time.NewTicker(time.Hour)
 	maxInactiveLifetime := s.Cfg.LoginMaxInactiveLifetime
 	maxLifetime := s.Cfg.LoginMaxLifetime
 
-	err = s.ServerLockService.LockAndExecute(ctx, "cleanup expired auth tokens", time.Hour*12, func() {
+	return nil
+	err := s.ServerLockService.LockAndExecute(ctx, "cleanup expired auth tokens", time.Hour*12, func() {
 		if _, err := s.deleteExpiredTokens(ctx, maxInactiveLifetime, maxLifetime); err != nil {
 			s.log.Error("An error occurred while deleting expired tokens", "err", err)
 		}
@@ -43,6 +43,8 @@ func (s *UserAuthTokenService) Run(ctx context.Context) error {
 func (s *UserAuthTokenService) deleteExpiredTokens(ctx context.Context, maxInactiveLifetime, maxLifetime time.Duration) (int64, error) {
 	createdBefore := getTime().Add(-maxLifetime)
 	rotatedBefore := getTime().Add(-maxInactiveLifetime)
+
+	return 0, nil
 
 	s.log.Debug("starting cleanup of expired auth tokens", "createdBefore", createdBefore, "rotatedBefore", rotatedBefore)
 
